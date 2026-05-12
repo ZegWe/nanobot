@@ -132,6 +132,7 @@ class SubagentManager:
         system_prompt: str,
         user_message: str,
         extra_tools: list["Tool"] | None = None,
+        max_iterations: int | None = None,
     ) -> AgentRunResult:
         """Run a single subagent step and return the result directly.
 
@@ -150,7 +151,7 @@ class SubagentManager:
             ],
             tools=tools,
             model=self.model,
-            max_iterations=8,
+            max_iterations=max_iterations if max_iterations is not None else 8,
             max_iterations_message=(
                 "Tool budget exhausted. "
                 "Call handoff() or complete() earlier next time."
