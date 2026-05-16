@@ -8,7 +8,7 @@ import os
 from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from loguru import logger
 
@@ -81,7 +81,7 @@ class AgentRunSpec:
     retry_wait_callback: Any | None = None
     checkpoint_callback: Any | None = None
     injection_callback: Any | None = None
-    llm_timeout_s: float | None = None
+    llm_timeout_s: float | None | Callable[[], float | None] = None
 
 
 @dataclass(slots=True)
@@ -592,7 +592,7 @@ class AgentRunner:
         hook: AgentHook,
         context: AgentHookContext,
     ):
-        timeout_s: float | None = spec.llm_timeout_s
+        timeout_s: float | None = spec.llm_timeout_s() if callable(spec.llm_timeout_s) else spec.llm_timeout_s
         if timeout_s is None:
             # Default to a finite timeout to avoid per-session lock starvation when an LLM
             # request hangs indefinitely (e.g. gateway/network stall).

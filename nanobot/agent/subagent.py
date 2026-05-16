@@ -199,11 +199,9 @@ class SubagentManager:
             ]
 
             sess_key = origin.get("session_key")
-            llm_timeout = (
-                self._llm_wall_timeout_for_session(sess_key)
-                if self._llm_wall_timeout_for_session
-                else None
-            )
+
+            def _llm_timeout() -> float | None:
+                return self._llm_wall_timeout_for_session(sess_key) if self._llm_wall_timeout_for_session else None
             result = await self.runner.run(AgentRunSpec(
                 initial_messages=messages,
                 tools=tools,
@@ -216,7 +214,7 @@ class SubagentManager:
                 fail_on_tool_error=True,
                 checkpoint_callback=_on_checkpoint,
                 session_key=sess_key,
-                llm_timeout_s=llm_timeout,
+                llm_timeout_s=_llm_timeout,
             ))
             status.phase = "done"
             status.stop_reason = result.stop_reason

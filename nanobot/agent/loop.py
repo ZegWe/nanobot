@@ -794,9 +794,8 @@ class AgentLoop:
                 retry_wait_callback=on_retry_wait,
                 checkpoint_callback=_checkpoint,
                 injection_callback=_drain_pending,
-                # Sustained goals may legitimately exceed NANOBOT_LLM_TIMEOUT_S; idle stall
-                # is still capped by NANOBOT_STREAM_IDLE_TIMEOUT_S in streaming providers.
-                llm_timeout_s=runner_wall_llm_timeout_s(
+                # Re-evaluated per LLM request so mid-run goal registration takes effect.
+                llm_timeout_s=lambda: runner_wall_llm_timeout_s(
                     self.sessions,
                     session.key if session is not None else session_key,
                     metadata=(session.metadata if session is not None else None),

@@ -43,4 +43,5 @@ async def test_subagent_forwards_resolver_to_agent_run_spec(tmp_path: Path) -> N
     mgr.runner.run.assert_called_once()
     spec = mgr.runner.run.call_args[0][0]
     assert spec.session_key == "cli:direct"
-    assert spec.llm_timeout_s == 0.0
+    assert callable(spec.llm_timeout_s)
+    assert spec.llm_timeout_s() == 0.0
