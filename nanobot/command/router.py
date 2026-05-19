@@ -73,6 +73,33 @@ class CommandRouter:
             return await handler(ctx)
         return None
 
+    def register_plugin(self, meta) -> None:
+        """Register a plugin command from its metadata.
+
+        Routes to priority, exact, or prefix tier based on ``meta.priority``
+        and whether ``meta.arg_hint`` is set (prefix variant also registered).
+        """
+        from nanobot.command.plugin import PluginCommand
+
+        if not isinstance(meta, PluginCommand):
+            raise TypeError(f"Expected PluginCommand, got {type(meta).__name__}")
+
+        if meta.priority:
+            self.priority(meta.command.lower(), meta.handler)
+            if meta.arg_hint:
+                self.prefix(meta.command.lower() + " ", meta.handler)
+        else:
+            self.exact(meta.command.lower(), meta.handler)
+            if meta.arg_hint:
+                self.prefix(meta.command.lower() + " ", meta.handler)
+
+    def has_command(self, cmd_name: str) -> bool:
+        """Check whether a command is already registered (any tier)."""
+        name = cmd_name.strip().lower()
+        return name in self._priority or name in self._exact or any(
+            name.startswith(pfx) for pfx, _ in self._prefix
+        )
+
     async def dispatch(self, ctx: CommandContext) -> OutboundMessage | None:
         """Try exact, then prefix handlers. Returns None if unhandled."""
         cmd = ctx.raw.lower()

@@ -29,6 +29,7 @@ from nanobot.agent.tools.self import MyTool
 from nanobot.bus.events import InboundMessage, OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.command import CommandContext, CommandRouter, register_builtin_commands
+from nanobot.command.plugin import discover_plugin_commands, get_all_commands
 from nanobot.config.schema import AgentDefaults, ModelPresetConfig
 from nanobot.providers.base import LLMProvider
 from nanobot.providers.factory import ProviderSnapshot
@@ -313,6 +314,10 @@ class AgentLoop:
         self._current_iteration: int = 0
         self.commands = CommandRouter()
         register_builtin_commands(self.commands)
+        discover_plugin_commands()
+        for cmd in get_all_commands():
+            if not self.commands.has_command(cmd.command):
+                self.commands.register_plugin(cmd)
 
     @classmethod
     def from_config(

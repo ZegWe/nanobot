@@ -114,6 +114,10 @@ nanobot = "nanobot.cli.commands:app"
 # [project.entry-points."nanobot.tools"]
 # my_plugin = "my_package.plugins:MyTool"
 
+# Third-party command plugins register here.
+# [project.entry-points."nanobot.commands"]
+# my_plugin = "my_package:get_commands"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"

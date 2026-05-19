@@ -27,7 +27,11 @@ from telegram.request import HTTPXRequest
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.base import BaseChannel
-from nanobot.command.builtin import build_help_text
+from nanobot.command.plugin import (
+    build_help_text,
+    build_telegram_slash_regex,
+    get_telegram_bot_commands,
+)
 from nanobot.config.paths import get_media_dir
 from nanobot.config.schema import Base
 from nanobot.security.network import validate_url_target
@@ -253,29 +257,6 @@ class TelegramChannel(BaseChannel):
     name = "telegram"
     display_name = "Telegram"
 
-    # Commands registered with Telegram's command menu
-    BOT_COMMANDS = [
-        BotCommand("start", "Start the bot"),
-        BotCommand("new", "Start a new conversation"),
-        BotCommand("stop", "Stop the current task"),
-        BotCommand("restart", "Restart the bot"),
-        BotCommand("status", "Show bot status"),
-        BotCommand("history", "Show recent conversation messages"),
-        BotCommand("goal", "Start a sustained objective (long-running task)"),
-        BotCommand("pairing", "Manage DM pairing (approve/deny/list)"),
-        BotCommand("model", "Switch runtime model preset"),
-        BotCommand("dream", "Run Dream memory consolidation now"),
-        BotCommand("dream_log", "Show the latest Dream memory change"),
-        BotCommand("dream_restore", "Restore Dream memory to an earlier version"),
-        BotCommand("help", "Show available commands"),
-    ]
-
-    # Regex for slash commands routed to AgentLoop via ``_forward_command``.
-    # Hyphenated ``dream-*`` commands stay on a separate handler (below).
-    TELEGRAM_BUS_SLASH_COMMAND_RE = re.compile(
-        r"^/(?:new|stop|restart|status|dream|history|goal|pairing|model)(?:@\w+)?(?:\s+.*)?$"
-    )
-
     @classmethod
     def default_config(cls) -> dict[str, Any]:
         return TelegramConfig().model_dump(by_alias=True)
@@ -360,18 +341,10 @@ class TelegramChannel(BaseChannel):
         self._app.add_error_handler(self._on_error)
 
         # Add command handlers (using Regex to support @username suffixes before bot initialization)
+        slash_re = build_telegram_slash_regex()
         self._app.add_handler(MessageHandler(filters.Regex(r"^/start(?:@\w+)?$"), self._on_start))
         self._app.add_handler(
-            MessageHandler(
-                filters.Regex(TelegramChannel.TELEGRAM_BUS_SLASH_COMMAND_RE),
-                self._forward_command,
-            )
-        )
-        self._app.add_handler(
-            MessageHandler(
-                filters.Regex(r"^/(dream-log|dream_log|dream-restore|dream_restore)(?:@\w+)?(?:\s+.*)?$"),
-                self._forward_command,
-            )
+            MessageHandler(filters.Regex(slash_re), self._forward_command)
         )
         self._app.add_handler(MessageHandler(filters.Regex(r"^/help(?:@\w+)?$"), self._on_help))
 
@@ -407,7 +380,11 @@ class TelegramChannel(BaseChannel):
         self.logger.info("bot @{} connected", bot_info.username)
 
         try:
-            await self._app.bot.set_my_commands(self.BOT_COMMANDS)
+            bot_commands = get_telegram_bot_commands()
+            # Ensure /start is always present
+            if not any(c.command == "start" for c in bot_commands):
+                bot_commands.insert(0, BotCommand("start", "Start the bot"))
+            await self._app.bot.set_my_commands(bot_commands)
             self.logger.debug("bot commands registered")
         except Exception as e:
             self.logger.warning("Failed to register bot commands: {}", e)

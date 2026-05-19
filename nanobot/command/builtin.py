@@ -11,6 +11,11 @@ from dataclasses import dataclass
 
 from nanobot import __version__
 from nanobot.bus.events import OutboundMessage
+from nanobot.command.plugin import (  # noqa: F401 re-export
+    PluginCommand,
+    build_help_text,
+    register_builtin,
+)
 from nanobot.command.router import CommandContext, CommandRouter
 from nanobot.utils.helpers import build_status_content
 from nanobot.utils.restart import set_restart_notice_to_env
@@ -617,35 +622,73 @@ async def cmd_help(ctx: CommandContext) -> OutboundMessage:
     )
 
 
-def build_help_text() -> str:
-    """Build canonical help text shared across channels."""
-    lines = ["🐈 nanobot commands:"]
-    for spec in BUILTIN_COMMAND_SPECS:
-        command = spec.command
-        if spec.arg_hint:
-            command = f"{command} {spec.arg_hint}"
-        lines.append(f"{command} — {spec.description}")
-    return "\n".join(lines)
-
-
 def register_builtin_commands(router: CommandRouter) -> None:
     """Register the default set of slash commands."""
     router.priority("/stop", cmd_stop)
+    register_builtin(PluginCommand(
+        "/stop", "Stop current task", cmd_stop,
+        title="Stop current task", icon="square", priority=True,
+    ))
     router.priority("/restart", cmd_restart)
+    register_builtin(PluginCommand(
+        "/restart", "Restart the bot process in place.", cmd_restart,
+        title="Restart nanobot", icon="rotate-cw", priority=True,
+    ))
     router.priority("/status", cmd_status)
-    router.exact("/new", cmd_new)
     router.exact("/status", cmd_status)
+    register_builtin(PluginCommand(
+        "/status", "Display runtime, provider, and channel status.", cmd_status,
+        title="Show status", icon="activity",
+    ))
+    router.exact("/new", cmd_new)
+    register_builtin(PluginCommand(
+        "/new", "Stop the current task and start a fresh conversation.", cmd_new,
+        title="New chat", icon="square-pen",
+    ))
     router.exact("/model", cmd_model)
     router.prefix("/model ", cmd_model)
+    register_builtin(PluginCommand(
+        "/model", "Show or switch the active model preset.", cmd_model,
+        title="Switch model preset", icon="brain", arg_hint="[preset]",
+    ))
     router.exact("/history", cmd_history)
     router.prefix("/history ", cmd_history)
+    register_builtin(PluginCommand(
+        "/history", "Print the last N persisted conversation messages.", cmd_history,
+        title="Show conversation history", icon="history", arg_hint="[n]",
+    ))
     router.exact("/goal", cmd_goal)
     router.prefix("/goal ", cmd_goal)
+    register_builtin(PluginCommand(
+        "/goal", "Tell the agent to treat the request as a long-running goal.", cmd_goal,
+        title="Start long-running goal", icon="activity", arg_hint="<goal>",
+    ))
     router.exact("/dream", cmd_dream)
+    register_builtin(PluginCommand(
+        "/dream", "Manually trigger memory consolidation.", cmd_dream,
+        title="Run Dream", icon="sparkles",
+    ))
     router.exact("/dream-log", cmd_dream_log)
     router.prefix("/dream-log ", cmd_dream_log)
+    register_builtin(PluginCommand(
+        "/dream-log", "Show what the last Dream consolidation changed.", cmd_dream_log,
+        title="Show Dream log", icon="book-open",
+    ))
     router.exact("/dream-restore", cmd_dream_restore)
     router.prefix("/dream-restore ", cmd_dream_restore)
+    register_builtin(PluginCommand(
+        "/dream-restore", "Revert memory to a previous Dream snapshot.", cmd_dream_restore,
+        title="Restore memory", icon="undo-2",
+    ))
     router.exact("/help", cmd_help)
+    register_builtin(PluginCommand(
+        "/help", "List available slash commands.", cmd_help,
+        title="Show help", icon="circle-help",
+    ))
     router.exact("/pairing", cmd_pairing)
     router.prefix("/pairing ", cmd_pairing)
+    register_builtin(PluginCommand(
+        "/pairing", "List, approve, deny or revoke pairing requests.", cmd_pairing,
+        title="Manage pairing", icon="shield",
+        arg_hint="[list|approve <code>|deny <code>|revoke <user_id>]",
+    ))
