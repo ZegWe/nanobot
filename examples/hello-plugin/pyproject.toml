@@ -1,0 +1,13 @@
+[project]
+name = "nanobot-hello"
+version = "0.1.0"
+description = "A minimal nanobot plugin that registers a /hello command"
+requires-python = ">=3.11"
+dependencies = ["nanobot-ai"]
+
+[project.entry-points."nanobot.commands"]
+hello = "nanobot_hello:get_commands"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

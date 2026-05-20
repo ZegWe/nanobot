@@ -291,6 +291,12 @@ class TestRouterRegisterPlugin:
 # ---------------------------------------------------------------------------
 
 class TestDiscoverPluginCommands:
+    @pytest.fixture(autouse=True)
+    def _mock_loose_discovery(self):
+        """Prevent filesystem scan for loose plugins from interfering with tests."""
+        with patch("nanobot.command.plugin._discover_loose_plugins"):
+            yield
+
     def test_no_plugins_installed(self) -> None:
         import nanobot.command.plugin as mod
 

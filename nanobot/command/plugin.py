@@ -100,6 +100,65 @@ def discover_plugin_commands() -> None:
     if _plugin_commands:
         logger.info("Discovered {} plugin command(s)", len(_plugin_commands))
 
+    # Also discover loose plugins installed via `nanobot plugins install`
+    _discover_loose_plugins()
+
+
+def _discover_loose_plugins() -> None:
+    """Scan ``~/.nanobot/plugins/`` for loose (non-pip) plugin installations.
+
+    Each subdirectory that has an ``__init__.py`` (i.e. a Python package) is
+    imported and checked for a ``get_commands()`` callable.
+    """
+    from pathlib import Path
+
+    plugins_dir = Path.home() / ".nanobot" / "plugins"
+    if not plugins_dir.is_dir():
+        return
+
+    for entry in sorted(plugins_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        init_file = entry / "__init__.py"
+        if not init_file.exists():
+            continue
+        name = entry.name
+        # Avoid re-importing packages that are already available via pip
+        try:
+            mod = __import__(name, fromlist=["get_commands"])
+        except ImportError:
+            try:
+                import sys
+                if str(entry) not in sys.path:
+                    sys.path.insert(0, str(entry.parent))
+                mod = __import__(name, fromlist=["get_commands"])
+            except Exception:
+                logger.debug("Failed to import loose plugin '{}'", name)
+                continue
+
+        factory = getattr(mod, "get_commands", None)
+        if factory is None:
+            continue
+
+        try:
+            commands = factory()
+        except Exception:
+            logger.warning("Loose plugin '{}' factory raised an exception", name)
+            continue
+
+        if not isinstance(commands, list):
+            continue
+
+        for cmd in commands:
+            if isinstance(cmd, PluginCommand):
+                # Skip if already registered (avoids duplicate between pip and loose)
+                if any(
+                    c.command == cmd.command and c.handler == cmd.handler
+                    for c in _plugin_commands
+                ):
+                    continue
+                _plugin_commands.append(cmd)
+
 
 def get_all_commands() -> list[PluginCommand]:
     """Return all registered commands (builtins first, then plugins)."""

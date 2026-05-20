@@ -18,6 +18,12 @@ from nanobot.channels.telegram import (
     TelegramConfig,
     _StreamBuf,
 )
+from nanobot.command.plugin import (
+    _builtin_commands,
+    _plugin_commands,
+    build_telegram_slash_regex,
+)
+from nanobot.command.router import CommandRouter as _CommandRouter
 
 
 class _FakeHTTPXRequest:
@@ -164,8 +170,24 @@ def _make_telegram_update(
     return SimpleNamespace(message=message, effective_user=user)
 
 
+@pytest.fixture()
+def _ensure_builtins():
+    """Ensure built-in commands are in the global registry for tests that need them."""
+    saved_builtins = list(_builtin_commands)
+    saved_plugins = list(_plugin_commands)
+    _builtin_commands.clear()
+    _plugin_commands.clear()
+    from nanobot.command.builtin import register_builtin_commands
+    register_builtin_commands(_CommandRouter())
+    yield
+    _builtin_commands.clear()
+    _plugin_commands.clear()
+    _builtin_commands.extend(saved_builtins)
+    _plugin_commands.extend(saved_plugins)
+
+
 @pytest.mark.asyncio
-async def test_start_creates_separate_pools_with_proxy(monkeypatch) -> None:
+async def test_start_creates_separate_pools_with_proxy(monkeypatch, _ensure_builtins) -> None:
     _FakeHTTPXRequest.clear()
     config = TelegramConfig(
         enabled=True,
@@ -1294,9 +1316,9 @@ async def test_forward_command_normalizes_telegram_safe_dream_aliases() -> None:
     assert handled[0]["content"] == "/dream-restore deadbeef"
 
 
-def test_telegram_bus_slash_command_regex_matches_agent_loop_commands() -> None:
-    """Bus-routed slash commands must match the Telegram handler regex (see builtin router)."""
-    pat = TelegramChannel.TELEGRAM_BUS_SLASH_COMMAND_RE
+def test_telegram_bus_slash_command_regex_matches_agent_loop_commands(_ensure_builtins) -> None:
+    """Bus-routed slash commands must match the unified Telegram handler regex."""
+    pat = build_telegram_slash_regex()
     assert pat.fullmatch("/history")
     assert pat.fullmatch("/history 5")
     assert pat.fullmatch("/goal ship the feature")
@@ -1304,12 +1326,13 @@ def test_telegram_bus_slash_command_regex_matches_agent_loop_commands() -> None:
     assert pat.fullmatch("/model fast")
     assert pat.fullmatch("/new@nanobot_bot")
     assert pat.fullmatch("/goal@nanobot_bot refine objective")
-    assert pat.fullmatch("/dream-log deadbeef") is None
-    assert pat.fullmatch("/dream-restore deadbeef") is None
+    # dream-log and dream-restore are now in the unified regex
+    assert pat.fullmatch("/dream-log deadbeef")
+    assert pat.fullmatch("/dream-restore deadbeef")
 
 
 @pytest.mark.asyncio
-async def test_on_help_includes_restart_command() -> None:
+async def test_on_help_includes_restart_command(_ensure_builtins) -> None:
     channel = TelegramChannel(
         TelegramConfig(enabled=True, token="123:abc", allow_from=["*"], group_policy="open"),
         MessageBus(),

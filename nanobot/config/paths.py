@@ -71,6 +71,16 @@ def get_bridge_install_dir() -> Path:
     return Path.home() / ".nanobot" / "bridge"
 
 
+def get_plugins_dir() -> Path:
+    """Return the directory for nanobot-managed plugin installations."""
+    return ensure_dir(Path.home() / ".nanobot" / "plugins")
+
+
+def get_plugins_manifest_path() -> Path:
+    """Return the path to the installed plugins manifest JSON file."""
+    return get_plugins_dir() / "installed.json"
+
+
 def get_legacy_sessions_dir() -> Path:
     """Return the legacy global session directory used for migration fallback."""
     return Path.home() / ".nanobot" / "sessions"
