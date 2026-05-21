@@ -116,6 +116,13 @@ BUILTIN_COMMAND_SPECS: tuple[BuiltinCommandSpec, ...] = (
         "shield",
         "[list|approve <code>|deny <code>|revoke <user_id>]",
     ),
+    BuiltinCommandSpec(
+        "/plugin",
+        "Manage plugins",
+        "List, install, uninstall or reload plugins.",
+        "plug",
+        "[list|install <path>|uninstall <name>|reload]",
+    ),
 )
 
 
@@ -622,6 +629,81 @@ async def cmd_help(ctx: CommandContext) -> OutboundMessage:
     )
 
 
+async def cmd_plugin(ctx: CommandContext) -> OutboundMessage:
+    """Manage plugins: list, install, uninstall, reload.
+
+    Usage:
+        /plugin list
+        /plugin install <path> [--name <name>]
+        /plugin uninstall <name>
+        /plugin reload
+    """
+    import shlex
+
+    from nanobot.plugins.manager import (
+        install_plugin,
+        list_plugins,
+        reload_plugins,
+        uninstall_plugin,
+    )
+
+    raw = ctx.args.strip()
+    try:
+        parts = shlex.split(raw)
+    except ValueError:
+        parts = raw.split()
+
+    if not parts:
+        parts = ["list"]
+
+    sub = parts[0].lower()
+
+    if sub == "list":
+        content = list_plugins()
+
+    elif sub == "install":
+        if len(parts) < 2:
+            content = "Usage: /plugin install <path> [--name <name>]"
+        else:
+            path = parts[1]
+            name: str | None = None
+            if len(parts) >= 4 and parts[2] in ("--name", "-n"):
+                name = parts[3]
+            elif len(parts) >= 3 and parts[2] in ("--name", "-n"):
+                content = "Usage: /plugin install <path> [--name <name>]"
+                return OutboundMessage(
+                    channel=ctx.msg.channel, chat_id=ctx.msg.chat_id,
+                    content=content, metadata=dict(ctx.msg.metadata or {}),
+                )
+            success, message = install_plugin(path, name)
+            content = f"{'✅' if success else '❌'} {message}"
+
+    elif sub == "uninstall":
+        if len(parts) < 2:
+            content = "Usage: /plugin uninstall <name>"
+        else:
+            success, message = uninstall_plugin(parts[1])
+            content = f"{'✅' if success else '❌'} {message}"
+
+    elif sub == "reload":
+        router = ctx.loop.commands if hasattr(ctx.loop, "commands") else None
+        success, message = reload_plugins(router)
+        content = f"{'✅' if success else '❌'} {message}"
+
+    else:
+        content = (
+            f"Unknown subcommand: '{sub}'\n"
+            "Usage: /plugin [list|install <path>|uninstall <name>|reload]"
+        )
+
+    return OutboundMessage(
+        channel=ctx.msg.channel,
+        chat_id=ctx.msg.chat_id,
+        content=content,
+        metadata={**dict(ctx.msg.metadata or {}), "render_as": "text"},
+    )
+
+
 def register_builtin_commands(router: CommandRouter) -> None:
     """Register the default set of slash commands."""
     router.priority("/stop", cmd_stop)
@@ -691,4 +773,11 @@ def register_builtin_commands(router: CommandRouter) -> None:
         "/pairing", "List, approve, deny or revoke pairing requests.", cmd_pairing,
         title="Manage pairing", icon="shield",
         arg_hint="[list|approve <code>|deny <code>|revoke <user_id>]",
+    ))
+    router.exact("/plugin", cmd_plugin)
+    router.prefix("/plugin ", cmd_plugin)
+    register_builtin(PluginCommand(
+        "/plugin", "List, install, uninstall or reload plugins.", cmd_plugin,
+        title="Manage plugins", icon="plug",
+        arg_hint="[list|install <path>|uninstall <name>|reload]",
     ))

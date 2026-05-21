@@ -1463,67 +1463,14 @@ def plugins_install(
     name: str | None = typer.Option(None, "--name", "-n", help="Plugin name (auto-detected if omitted)"),
 ):
     """Install a plugin from a local directory into ~/.nanobot/plugins/."""
-    import json
-    import shutil
-    from pathlib import Path
-    from nanobot.config.paths import get_plugins_dir, get_plugins_manifest_path
+    from nanobot.plugins.manager import install_plugin
 
-    src = Path(path).expanduser().resolve()
-    if not src.is_dir():
-        console.print(f"[red]Error:[/red] '{path}' is not a directory")
+    success, message = install_plugin(path, name)
+    if success:
+        console.print(f"[green]{message}[/green]")
+    else:
+        console.print(f"[red]Error:[/red] {message}")
         raise typer.Exit(1)
-
-    # Auto-detect: if the given dir is a project (has pyproject.toml), look for
-    # the Python package directory inside it
-    pkg_dir = src
-    if not (pkg_dir / "__init__.py").exists() and (src / "pyproject.toml").exists():
-        # Try to find the package directory from pyproject.toml
-        import tomllib
-        try:
-            pyproject = src / "pyproject.toml"
-            data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-            pkg_name = data.get("project", {}).get("name", "").replace("-", "_")
-            candidate = src / pkg_name
-            if candidate.is_dir() and (candidate / "__init__.py").exists():
-                pkg_dir = candidate
-            else:
-                # Fallback: find any subdirectory with __init__.py
-                for sub in sorted(src.iterdir()):
-                    if sub.is_dir() and (sub / "__init__.py").exists():
-                        pkg_dir = sub
-                        break
-        except Exception:
-            for sub in sorted(src.iterdir()):
-                if sub.is_dir() and (sub / "__init__.py").exists():
-                    pkg_dir = sub
-                    break
-
-    if not (pkg_dir / "__init__.py").exists():
-        console.print(f"[red]Error:[/red] '{path}' is not a Python package (missing __init__.py)")
-        raise typer.Exit(1)
-
-    install_name = name or pkg_dir.name
-    plugins_dir = get_plugins_dir()
-    dest = plugins_dir / install_name
-
-    if dest.exists():
-        console.print(f"[yellow]Plugin '{install_name}' already exists, overwriting...[/yellow]")
-        shutil.rmtree(dest)
-
-    shutil.copytree(pkg_dir, dest)
-    console.print(f"[green]Copied[/green] {pkg_dir} -> {dest}")
-
-    # Register in manifest
-    manifest_path = get_plugins_manifest_path()
-    manifest: dict = {}
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    plugins_list: list = manifest.setdefault("plugins", [])
-    if install_name not in plugins_list:
-        plugins_list.append(install_name)
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-    console.print(f"[green]Registered[/green] '{install_name}' in {manifest_path}")
-    console.print("\nRestart the gateway to load the plugin.")
 
 
 @plugins_app.command("uninstall")
@@ -1531,67 +1478,21 @@ def plugins_uninstall(
     name: str = typer.Argument(..., help="Plugin name to uninstall"),
 ):
     """Remove a previously installed plugin."""
-    import json
-    import shutil
-    from nanobot.config.paths import get_plugins_dir, get_plugins_manifest_path
+    from nanobot.plugins.manager import uninstall_plugin
 
-    plugins_dir = get_plugins_dir()
-    dest = plugins_dir / name
-    if not dest.exists():
-        console.print(f"[yellow]Plugin '{name}' is not installed.[/yellow]")
-        return
-
-    shutil.rmtree(dest)
-    console.print(f"[green]Removed[/green] {dest}")
-
-    manifest_path = get_plugins_manifest_path()
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        plugins_list: list = manifest.get("plugins", [])
-        if name in plugins_list:
-            plugins_list.remove(name)
-            manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-            console.print(f"[green]Unregistered[/green] '{name}'")
+    success, message = uninstall_plugin(name)
+    if success:
+        console.print(f"[green]{message}[/green]")
+    else:
+        console.print(f"[yellow]{message}[/yellow]")
 
 
 @plugins_app.command("list")
 def plugins_list():
     """List all registered slash commands (built-in and plugins)."""
-    import json
-    from nanobot.command.plugin import discover_plugin_commands, get_all_commands, _builtin_commands, _plugin_commands
-    from nanobot.config.paths import get_plugins_dir, get_plugins_manifest_path
-    from nanobot.command.builtin import register_builtin_commands
-    from nanobot.command.router import CommandRouter
+    from nanobot.plugins.manager import list_plugins
 
-    manifest_path = get_plugins_manifest_path()
-    loose_names: set[str] = set()
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        loose_names = set(manifest.get("plugins", []))
-
-    # Ensure builtins are registered
-    if not _builtin_commands:
-        register_builtin_commands(CommandRouter())
-    discover_plugin_commands()
-    all_cmds = get_all_commands()
-
-    table = Table(title="Command Plugins")
-    table.add_column("Command", style="cyan")
-    table.add_column("Description")
-    table.add_column("Source")
-
-    for cmd in all_cmds:
-        if cmd in _builtin_commands:
-            source = "builtin"
-        else:
-            source = "plugin"
-        table.add_row(cmd.command, cmd.description, source)
-
-    console.print(table)
-
-    if loose_names:
-        console.print(f"\n[dim]Installed loose plugins: {', '.join(sorted(loose_names))}[/dim]")
-    console.print(f"[dim]Plugins directory: {get_plugins_dir()}[/dim]")
+    console.print(list_plugins())
 
 
 # ============================================================================
